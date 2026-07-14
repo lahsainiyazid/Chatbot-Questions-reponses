@@ -1,0 +1,5 @@
+data->Questions a traiter.zip
+embedding model ->"BAAI/bge-m3"
+retrieval method ->Hybrid
+Reranker->Yes 
+llm->Gemini 2.5-flash
