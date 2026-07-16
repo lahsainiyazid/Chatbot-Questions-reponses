@@ -1,0 +1,4 @@
+day 1: Normalized names of subdirectories in Questions a traiter for better metadata it has 196 pdfs so it is already good data and created chunks 
+day 2: should restart chunking and change \n and weird controll characters such as :\u001a, and \u001b use them by replacing these ranges in regfex:
+Range 1: \x00-\x1f (Standard ASCII Control Characters) Range 2: \x7f-\x9f (Delete and Extended Control Characters)
+leanred about context-relevance ,faithfulness,answer relevance i find it hard to create test dataset so i will move on to query rewriting
