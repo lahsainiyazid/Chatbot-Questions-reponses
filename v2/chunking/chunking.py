@@ -1,4 +1,5 @@
-from pathlib import Path 
+from pathlib import Path
+import re 
 import json 
 import os 
 from langchain_community.document_loaders import Docx2txtLoader 
@@ -10,7 +11,9 @@ for file in folder.glob("*.docx"):
         loader=Docx2txtLoader(str(file))
         docs=loader.load()
         for doc in docs:
-            doc.metadata["source"]=os.fsdecode(file.name) 
+            doc.metadata["source"]=os.fsdecode(file.name)
+            cleaned_content=re.sub(r'\n{3,}',"\n\n",doc.page_content)
+            doc.page_content=cleaned_content.strip()
         documents.extend(docs)
     except Exception as e:
         print(f"Error loading {file.name}:{e}")
@@ -26,9 +29,9 @@ chunks=splitter.split_documents(documents)
 print(f"Total chunks:{len(chunks)}")
 output=[]
 for i ,chunk in enumerate(chunks):
-    updated_metadata={"metadata":chunk.metadata,
+    updated_metadata={**chunk.metadata,
                       "id":i}
     output.append({"id":i,"Content":chunk.page_content,"metadata":updated_metadata})
-with open("traite_v3_docs.json","w",encoding="utf-8") as f :
+with open("traite_v5_docs.json","w",encoding="utf-8") as f :
     json.dump(output,f,ensure_ascii=False,indent=2)
 print("Saved chunks !")
