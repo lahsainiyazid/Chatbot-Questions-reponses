@@ -31,7 +31,7 @@ output=[]
 for i ,chunk in enumerate(chunks):
     updated_metadata={**chunk.metadata,
                       "id":i}
-    output.append({"id":i,"Content":chunk.page_content,"metadata":updated_metadata})
-with open("traite_v5_docs.json","w",encoding="utf-8") as f :
+    output.append({"Content":chunk.page_content,"metadata":updated_metadata})
+with open("traite_v6_docs.json","w",encoding="utf-8") as f :
     json.dump(output,f,ensure_ascii=False,indent=2)
 print("Saved chunks !")

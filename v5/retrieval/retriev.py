@@ -54,8 +54,8 @@ retrieval_start = time.perf_counter()
 
 # Setup retrievers
 bm25 = BM25Retriever.from_documents(documents)
-db.k = 10 
-dense = db.as_retriever(search_kwargs={"k": 10})
+db.k = 5
+dense = db.as_retriever(search_kwargs={"k": 5})
 hybrid = EnsembleRetriever(
     retrievers=[bm25, dense],
     weights=[0.7, 0.3]

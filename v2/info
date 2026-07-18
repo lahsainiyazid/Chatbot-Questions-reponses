@@ -1,0 +1,6 @@
+data->Traite.zip
+embeddings->BAAI/bge-m3
+Rertrieval->Hybrid
+Reranker->BAAI/bge-reranker-v2-m3
+Database->Chromadb
+llm->Gemini-2.5-flash

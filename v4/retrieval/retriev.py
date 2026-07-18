@@ -21,12 +21,12 @@ for item in data:
         "source":item.get("source"),
         "id":item.get("id")
     }))
+Question=input("Entrez votre Question:")
 bm25=BM25Retriever.from_documents(documents)
 bm25.k=5 
 dense=db.as_retriever(search_kwargs={"k":5})
 hybrid=EnsembleRetriever(retrievers=[bm25,dense],
                          weights=[0.7,0.3])
-Question=input("Entrez votre Question:")
 results=hybrid.invoke(Question)
 context="\n\n".join([doc.page_content for doc in results])
 prompt =f"""

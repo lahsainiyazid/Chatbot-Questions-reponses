@@ -1,0 +1,53 @@
+This week
+
+1. Add latency measurement (highest priority)
+Measure each stage separately, for example:
+
+Embedding
+BM25 retrieval
+Dense retrieval
+Hybrid merge
+Reranker
+LLM
+Total response time
+
+This tells you exactly where the time is being spent.
+2. Finish embedding experiments
+
+Since you're already testing models like multilingual-e5-small, compare them using the same latency measurements.
+3. Tune retrieval parameters
+
+Try combinations like:
+
+k=5 → rerank to 3
+k=10 → rerank to 5
+
+Also experiment with chunk size if you have time.
+4. Implement query rewriting
+
+I would implement it, but make it optional with a configuration flag.
+
+For example:
+
+ENABLE_QUERY_REWRITE = False
+
+Then you can easily compare:
+
+with rewriting
+without rewriting
+Next week
+
+Once you receive the Excel file:
+
+Convert it into a RAG evaluation dataset.
+Run Ragas.
+Compare all your pipeline versions using the same dataset.
+
+For example:
+
+Version	Latency	Context Recall	Faithfulness	Answer Correctness
+BGE-M3	1.8 s	0.93	0.95	0.91
+e5-small	1.2 s	0.92	0.94	0.91
+e5-small + rewrite	1.5 s	0.95	0.95	0.93
+
+At that point, you'll be making decisions based on evidence rather than intuition.
