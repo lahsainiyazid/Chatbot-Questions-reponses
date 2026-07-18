@@ -1,0 +1,5 @@
+data->Traite 1+Traite 2
+embeddings->intfloat/multlilingual-e5-small
+retrieval->hybrid 0.7 sparse+0.3 dense (k=5 for each)
+db->Chroma db 
+llm->Gemini 2.5-flash
