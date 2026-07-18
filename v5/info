@@ -1,0 +1,6 @@
+data->Traite +Traite 2 
+embeddings->intfloat/multilingual-e5-small 
+retrieval->Hybrid (0.7 sparse,0.3 dense) k=10 for each 
+reranker->BAAI/bge-reranker-v2-m3 
+database->Chromadb 
+llm->Gemini 2.5-flash
