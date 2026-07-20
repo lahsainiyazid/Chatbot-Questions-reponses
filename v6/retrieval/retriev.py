@@ -6,43 +6,159 @@ from langchain_community.retrievers import BM25Retriever
 from sentence_transformers import CrossEncoder 
 from langchain_chroma import Chroma 
 from langchain_classic.retrievers import EnsembleRetriever
-from google import genai 
-key=os.environ.get("key")
-client=genai.Client(api_key=key)
-documents=[]
-with open("/home/yazid/stage/v6/chunking/complete_windows.json") as f:
-    data=json.load(f)
+from ragas.llms import LangchainLLMWrapper
+from ragas.embeddings import LangchainEmbeddingsWrapper 
+from langchain_groq import ChatGroq 
+
+# 1. Setup Client
+llm=ChatGroq(model="llama-3.3-70b-versatile",temperature=0,api_key=os.environ.get("GROQ_API_KEY"))
+
+# 2. Load Documents
+documents = []
+with open("/home/yazid/stage/v6/chunking/complete_windows.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
+
 for item in data:
-    text=f"""
-        Content:{item.get("Content","")}
+    text = f"""
+        Content: {item.get("Content", "")}
     """.strip()
-    documents.append(Document(page_content=text,metadata={"source":item.get("source",""),"id":item.get("id","")}))
-embeddings=HuggingFaceEmbeddings(model_name="intfloat/multilingual-e5-small",model_kwargs={"device":"cpu"},encode_kwargs={"normalize_embeddings":True})
-db=Chroma(persist_directory="/home/yazid/stage/v6/embedding+db/content/db6_v6",embedding_function=embeddings,collection_name="db6_v6")
-Question=input("Entrez votre Question:")
-bm25=BM25Retriever.from_documents(documents)
-bm25.k=5 
-dense=db.as_retriever(search_kwargs={"k":5})
-hybrid=EnsembleRetriever(retrievers=[bm25,dense],
-                         weights=[0.7,0.3])
-results=hybrid.invoke(Question)
-reranker=CrossEncoder("BAAI/bge-reranker-v2-m3")
-pairs=[(Question,doc.page_content) for doc in results]
-scores=reranker.predict(pairs)
-ranked_docs=[doc for _,doc in sorted(zip(scores,results),
-                                         key=lambda x:x[0],
-                                         reverse=True)]
-final_docs=ranked_docs[:3]
-context="\n\n".join(doc.page_content for doc in final_docs)
-prompt = f"""
+    documents.append(Document(page_content=text, metadata={"source": item.get("source", ""), "id": item.get("id", "")}))
+
+# 3. Setup Embeddings and Vector DB
+embeddings = HuggingFaceEmbeddings(
+    model_name="intfloat/multilingual-e5-small",
+    model_kwargs={"device": "cpu"},
+    encode_kwargs={"normalize_embeddings": True}
+)
+db = Chroma(
+    persist_directory="/home/yazid/stage/v6/embedding+db/content/db6_v6",
+    embedding_function=embeddings,
+    collection_name="db6_v6"
+)
+
+# 4. Initialize Retrievers and Hybrid Search (Ensemble)
+vector_retriever = db.as_retriever(search_kwargs={"k": 5})
+bm25_retriever = BM25Retriever.from_documents(documents)
+bm25_retriever.k = 5
+
+hybrid = EnsembleRetriever(
+    retrievers=[bm25_retriever, vector_retriever],
+    weights=[0.5, 0.5]
+)
+
+# 5. Initialize CrossEncoder Reranker
+reranker = CrossEncoder("BAAI/bge-reranker-large") # Replace with your preferred cross-encoder model if different
+
+# 6. RAG Function
+def ask_rag(question):
+    # retrieval
+    results = hybrid.invoke(question)
+
+    if not results:
+        return "أنا آسف، ولكن السياق المقدم لا يسمح بالإجابة على هذا السؤال.", []
+
+    # reranking
+    pairs = [
+        (question, doc.page_content)
+        for doc in results
+    ]
+
+    scores = reranker.predict(pairs)
+
+    ranked_docs = [
+        doc for _, doc in sorted(
+            zip(scores, results),
+            key=lambda x: x[0],
+            reverse=True
+        )
+    ]
+
+    final_docs = ranked_docs[:3]
+
+    # contexts for RAGAS
+    contexts = [
+        doc.page_content
+        for doc in final_docs
+    ]
+
+    context = "\n\n".join(contexts)
+
+    prompt = f"""
 Strict rules:
-1. Factuality: Rely strictly on facts directly mentioned in the context. Do not assume, extrapolate, or use external knowledge.
-2. Transparency: If the answer is not in the context, reply exactly: "أنا آسف، ولكن السياق المقدم لا يسمح بالإجابة على هذا السؤال." Do not guess.
-3. Clarity: Be concise, precise, and organized in Arabic.
 
-CONTEXT: {context}
-QUESTION: {Question}""".strip()
-response=client.models.generate_content(model="gemini-2.5-flash",contents=prompt)
-print(response.text)
+1. Answer only from context.
+2. If answer is missing reply:
+"أنا آسف، ولكن السياق المقدم لا يسمح بالإجابة على هذا السؤال."
 
+3. Be concise and organized in Arabic.
 
+CONTEXT:
+{context}
+
+QUESTION:
+{question}
+""".strip()
+    response=llm.invoke(prompt)     
+    return response.content, contexts
+
+from datasets import Dataset
+from ragas import evaluate
+from ragas.metrics import (
+    faithfulness,
+    answer_relevancy,
+    context_precision,
+    context_recall,
+)
+
+test_results = []
+
+MAX_SAMPLES = 10
+
+with open(
+    "/home/yazid/stage/dataset/ragas_dataset.jsonl",
+    "r",
+    encoding="utf-8"
+) as f:
+
+    for i, line in enumerate(f):
+
+        if i >= MAX_SAMPLES:
+            break
+
+        item = json.loads(line)
+
+        question = item["question"]
+        ground_truth = item["ground_truth"]
+
+        print(f"Testing {i+1}/{MAX_SAMPLES}")
+
+        answer, contexts = ask_rag(question)
+
+        test_results.append({
+            "question": question,
+            "answer": answer,
+            "contexts": contexts,
+            "ground_truth": ground_truth,
+        })
+
+dataset = Dataset.from_list(test_results)
+evaluator_llm=LangchainLLMWrapper(llm)
+evaluator_embeddings=LangchainEmbeddingsWrapper(embeddings)
+results = evaluate(
+    dataset=dataset,
+    metrics=[
+        faithfulness,
+        answer_relevancy,
+        context_precision,
+        context_recall,
+    ],
+    llm=evaluator_llm,
+    embeddings=evaluator_embeddings
+)
+
+print(results)
+
+results.to_pandas().to_csv(
+    "ragas_results.csv",
+    index=False
+)
