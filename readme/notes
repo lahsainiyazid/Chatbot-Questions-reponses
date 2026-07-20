@@ -7,4 +7,5 @@ make model faster i need to fight time on a cpu with no api key or servers to ho
 also got idea to export many api keys in crontab and rotate them i might need to free up enough latency by using smaller embedding models to learn more about rag 
 Retrieval time: 0.3541 seconds
 Reranker time:0.3541seconds   i did simpler model and got better faster results i can now add query rewriting using local ollama model added python script to fix file
-corruption now i can do chunking and create tesset
+corruption now i can do chunking and create tesset and found that two folders are duplicates so i will only work on one folder 1 since folder 2 is included in folder 
+1
