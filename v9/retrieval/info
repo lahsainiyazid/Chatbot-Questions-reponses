@@ -1,0 +1,7 @@
+data->traite.zip
+embeddings->intfloat/multilingual-e5-small
+db->Chromadb
+retrieval->hybrid 0.6 sparse,0.4 dense k=5 for each 
+Query rewritting->One rewritten Query 
+reranker->corss-encoder/ms-macro-MiniLM-L6-v2
+llm->llama-3.3-70b-versatile
