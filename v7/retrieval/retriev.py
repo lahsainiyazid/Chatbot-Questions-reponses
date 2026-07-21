@@ -1,5 +1,6 @@
 import os 
-import json 
+import json
+import time 
 from langchain_core.documents import Document 
 from langchain_huggingface import HuggingFaceEmbeddings 
 from langchain_community.retrievers import BM25Retriever 
@@ -51,13 +52,16 @@ reranker = CrossEncoder("BAAI/bge-reranker-large") # Replace with your preferred
 
 # 6. RAG Function
 def ask_rag(question):
+    total_start=time.perf_counter()
+    retrieval_start=time.perf_counter()
     # retrieval
     results = hybrid.invoke(question)
-
+    retrieval_time=time.perf_counter()-retrieval_start
     if not results:
         return "أنا آسف، ولكن السياق المقدم لا يسمح بالإجابة على هذا السؤال.", []
 
     # reranking
+    reranker_start=time.perf_counter()
     pairs = [
         (question, doc.page_content)
         for doc in results
@@ -74,7 +78,7 @@ def ask_rag(question):
     ]
 
     final_docs = ranked_docs[:3]
-
+    reranker_time=time.perf_counter()-reranker_start
     # contexts for RAGAS
     contexts = [
         doc.page_content
@@ -98,7 +102,17 @@ CONTEXT:
 QUESTION:
 {question}
 """.strip()
-    response=llm.invoke(prompt)     
+    llm_start=time.perf_counter()
+    response=llm.invoke(prompt)  
+    llm_time=time.perf_counter()-llm_start
+    total_time=time.perf_counter()-total_start
+    print("\n========== Latency ==========")
+    print(f"Retrieval : {retrieval_time:.3f} s")
+    print(f"Reranker : {reranker_time:.3f} s")
+    print(f"LLM       : {llm_time:.3f} s")
+    print(f"Total     : {total_time:.3f} s")
+    print("=============================\n")
+    
     return response.content, contexts
 
 from datasets import Dataset

@@ -1,0 +1,10 @@
+data->traite.zip
+embeddings->intfloat/multilingual-e5-small
+db->Chromadb
+retrieval->0.5 sparse 0.5 dense k=5 for each
+reranker->BAAI/bge-reranker-large 
+llm->groq:llama-3.3-70b-versatile ,temperature=0
+results:Faithfulness: 0.9792 ✅
+Answer relevancy: 0.8961 ✅
+Context precision: 1.0000 ✅
+Context recall: 0.6667 ❌
