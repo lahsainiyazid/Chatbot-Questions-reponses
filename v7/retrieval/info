@@ -1,0 +1,7 @@
+data->traite.zip 
+embeddings->multilingual-e5-small
+db->Chromadb
+retrieval->0.4 dense 0.6 sparse k=5 for each 
+reranker->BAAI/bge-reranker-large
+results:
+{'faithfulness': 0.9796, 'answer_relevancy': 0.8954, 'context_precision': 1.0000, 'context_recall': 1.0000}
