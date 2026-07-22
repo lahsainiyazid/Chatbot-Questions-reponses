@@ -50,7 +50,7 @@ Question:{question}
                                      reverse=True)]
     final_docs=ranked_docs[:5]
     contexts=([doc.page_content for doc in final_docs])
-    context_text="/n/n".join(contexts)
+    context_text="\n\n".join(contexts)
     system_prompt=f"""
 You are an expert assistant for Moroccan public administration.
 
@@ -82,26 +82,10 @@ Question:
 """
 
     response=llm.invoke([("system",system_prompt),("user",user_prompt)])
-    return response.content,contexts 
-from datasets import Dataset 
-from ragas import evaluate 
-from ragas.metrics import (faithfulness,answer_relevancy,context_precision,context_recall)
-test_results=[]
-MAX_SAMPLES=3 
-with open("/home/yazid/stage/dataset/ragas_dataset.jsonl") as f:
-    for i,line in enumerate(f):
-        if i>=MAX_SAMPLES:
-            break 
-        item=json.loads(line)
-        question=item["question"]
-        ground_truth=item["ground_truth"]
-        answer,context=ask_rag_question(question)
-        test_results.append({"question":question,"answer":answer,"contexts":context,"ground_truth":ground_truth})
-dataset=Dataset.from_list(test_results)
-evluator_llm=LangchainLLMWrapper(llm)
-evaluator_embeddings=LangchainEmbeddingsWrapper(embeddings)
-results=evaluate(dataset=dataset,metrics=[faithfulness,answer_relevancy,context_precision,context_recall],llm=evluator_llm,embeddings=evaluator_embeddings)
-print(results)
+    print(response.content.strip())
 
+question=input("Entrez votre question:")
+
+ask_rag_question(question)
 
 
