@@ -9,8 +9,6 @@ from langchain_community.retrievers import BM25Retriever
 from langchain_chroma import Chroma 
 from langchain_classic.retrievers import EnsembleRetriever
 from sentence_transformers import CrossEncoder
-from ragas.llms import LangchainLLMWrapper 
-from ragas.embeddings import LangchainEmbeddingsWrapper 
 from langchain_groq import ChatGroq
 app=FastAPI()
 class QuestionRequest(BaseModel):
@@ -33,12 +31,14 @@ bm25.k=5
 hybrid=EnsembleRetriever(retrievers=[dense_retriever,bm25],
                             weights=[0.4,0.6])
 reranker=CrossEncoder("cross-encoder/ms-marco-MiniLM-L6-v2")
-@app.get("/get")
+@app.get("/")
 def home():
     return {"status":"running",
             "message":"rag api is online"}
 @app.post("/ask")
 def ask_rag_question(request:QuestionRequest):
+    start_time=time.time()
+    expansion_start=time.time()
     expand_prompt=f"""
     You are a query expansion tool for a Moroccan government RAG system.
 
@@ -52,13 +52,18 @@ Rules:
 Question:{request.question}
 """
     expanded_query=llm.invoke([("user",expand_prompt)]).content.strip()
+    expansion_time=time.time()-expansion_start
     print("Expansion:", expanded_query)
+    retrieval_start=time.time()
     results=hybrid.invoke(request.question+" "+expanded_query)
+    retrieval_time=time.time()-retrieval_start
+    reranker_start=time.time()
     pairs=[(request.question,doc.page_content) for doc in results]
     scores=reranker.predict(pairs)
     ranked_docs=[doc for _,doc in sorted(zip (scores,results),
                                      key=lambda x:x[0],
                                      reverse=True)]
+    reranker_time=time.time()-reranker_start
     final_docs=ranked_docs[:5]
     contexts=([doc.page_content for doc in final_docs])
     context_text="\n\n".join(contexts)
@@ -91,8 +96,21 @@ Context:
 Question:
 {request.question}
 """
-
+    llm_start=time.time()
     response=llm.invoke([("system",system_prompt),("user",user_prompt)])
+    llm_time=time.time()-llm_start
+    total_time=time.time()-start_time
+    token_usage=response.response_metadata["token_usage"]
     return {"question":request.question,
-            "answer":response.content.strip()}
+            "answer":response.content.strip(),
+            "total_time":round(total_time,3),
+            "expansion_time":round(expansion_time,3),
+            "retrieval_time":round(retrieval_time,3),
+            "reranker_time":round(reranker_time,3),
+            "llm_time":round(llm_time,3),
+            "tokens":{
+            "total_tokens":token_usage["total_tokens"],
+        "prompt_tokens":token_usage["prompt_tokens"],
+         "completion_tokens":token_usage["completion_tokens"]
+            }}
 
