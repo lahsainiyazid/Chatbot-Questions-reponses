@@ -1,0 +1,337 @@
+Rapport des travaux réalisés – Développement d'un chatbot RAG pour les services administratifs marocains
+1. Contexte du projet
+
+L'objectif du projet est de développer un chatbot intelligent basé sur une architecture Retrieval-Augmented Generation (RAG) permettant de répondre aux questions concernant les procédures administratives marocaines à partir des données du portail Idarati et du Ministère de la Transition Numérique.
+
+Le projet vise à produire des réponses précises, rapides et fidèles aux documents officiels tout en limitant les hallucinations des modèles de langage.
+
+2. Collecte des données
+2.1 Web Scraping
+
+Plusieurs méthodes de scraping ont été expérimentées afin d'obtenir des données de qualité.
+
+Technologies testées :
+
+BeautifulSoup
+Playwright
+Trafilatura
+CloudScraper
+
+Après plusieurs essais, CloudScraper + BeautifulSoup a été retenu car cette combinaison :
+
+contourne les protections Cloudflare,
+est rapide,
+fournit un HTML propre,
+facilite l'extraction des informations.
+2.2 Nettoyage des données
+
+Les données récupérées ont été nettoyées afin de supprimer :
+
+les balises inutiles,
+les doublons,
+les espaces superflus,
+les contenus non informatifs.
+
+Les informations importantes ont ensuite été sauvegardées au format JSON.
+
+Chaque document contient notamment :
+
+identifiant
+source
+titre
+contenu
+3. Préparation des documents
+
+Les documents JSON sont convertis en objets LangChain :
+
+Document(
+    page_content=text,
+    metadata={
+        "source": ...,
+        "id": ...
+    }
+)
+
+Cette structure permet :
+
+une indexation correcte,
+la conservation des métadonnées,
+un affichage de la source dans la réponse finale.
+4. Découpage (Chunking)
+
+Les documents ont été découpés grâce à :
+
+RecursiveCharacterTextSplitter
+
+Plusieurs tailles ont été testées :
+
+1000 / overlap 150
+800 / overlap 100
+
+Le second réglage a offert un meilleur compromis entre :
+
+précision,
+vitesse,
+rappel.
+5. Génération des embeddings
+
+Plusieurs modèles d'embeddings ont été comparés.
+
+Modèles testés
+all-MiniLM-L6-v2
+paraphrase-multilingual-MiniLM-L12-v2
+paraphrase-multilingual-mpnet-base-v2
+intfloat/multilingual-e5-base
+intfloat/multilingual-e5-small
+BAAI/bge-m3
+
+Le modèle finalement retenu est :
+
+intfloat/multilingual-e5-small
+
+car il offre :
+
+une très bonne vitesse,
+de bonnes performances multilingues,
+une faible consommation mémoire.
+6. Base vectorielle
+
+Deux solutions ont été utilisées.
+
+FAISS
+
+Première implémentation.
+
+Avantages :
+
+rapide
+
+Inconvénients :
+
+problèmes de sérialisation,
+gestion plus complexe.
+ChromaDB
+
+La base retenue est finalement :
+
+ChromaDB
+
+Avantages :
+
+persistance automatique,
+intégration LangChain,
+simplicité d'utilisation.
+7. Recherche documentaire
+
+Deux méthodes de recherche ont été combinées.
+
+Recherche dense
+
+Utilise les embeddings.
+
+Base :
+
+ChromaDB
+Recherche sparse
+
+Utilise :
+
+BM25Retriever
+
+Cette méthode s'est révélée très performante sur :
+
+documents administratifs
+textes arabes
+requêtes contenant des mots-clés précis.
+8. Recherche hybride
+
+La solution finale combine :
+
+Dense Retrieval
+BM25
+
+avec :
+
+Dense : 40 %
+
+Sparse : 60 %
+
+Configuration utilisée :
+
+Dense k = 5
+Sparse k = 5
+
+Cette combinaison améliore :
+
+le rappel
+la pertinence
+la robustesse.
+9. Reranking
+
+Après la récupération des documents, un reranker est appliqué.
+
+Modèle utilisé :
+
+cross-encoder/ms-marco-MiniLM
+
+Puis plusieurs essais ont été réalisés avec :
+
+BAAI/bge-reranker-v2-m3
+
+Le reranker sélectionne les documents les plus pertinents avant leur envoi au LLM.
+
+10. Génération des réponses
+
+Plusieurs modèles ont été testés.
+
+Gemini
+Gemini 2.0 Flash
+Gemini 2.5 Flash
+Groq
+
+Migration vers Groq afin d'obtenir :
+
+une latence plus faible,
+des réponses plus rapides.
+
+Les temps de génération ont fortement diminué.
+
+11. Mesure des performances
+
+Le projet mesure séparément :
+
+temps de retrieval
+temps du reranker
+temps du LLM
+temps total
+
+Exemple :
+
+Retrieval : 0.15 s
+
+Reranker : 6.7 s
+
+LLM : 1.7 s
+
+Total : 9.1 s
+
+Ces mesures ont permis d'identifier le reranker comme principal goulot d'étranglement.
+
+12. Optimisation des performances
+
+Différentes optimisations ont été réalisées :
+
+réduction de la taille des embeddings
+changement du modèle d'embedding
+optimisation du nombre de documents récupérés
+suppression des doublons
+changement de base vectorielle
+migration vers Groq
+comparaison de plusieurs rerankers
+
+Objectif fixé :
+
+Temps total < 3 secondes
+13. Réduction des hallucinations
+
+Plusieurs pistes ont été étudiées.
+
+Amélioration du retrieval
+Hybrid Search
+Meilleur reranking
+
+Utilisation d'un CrossEncoder.
+
+Réduction des documents inutiles
+
+Le reranker conserve uniquement les documents les plus pertinents.
+
+Query Rewriting
+
+Début d'intégration d'un module de reformulation automatique des questions afin de :
+
+améliorer la recherche,
+augmenter le rappel,
+diminuer les hallucinations.
+14. Évaluation automatique
+
+Le système est évalué avec RAGAS.
+
+Les métriques utilisées sont :
+
+Faithfulness
+Answer Relevancy
+Context Precision
+Context Recall
+
+Résultats obtenus :
+
+Métrique	Score
+Faithfulness	0.979
+Answer Relevancy	0.896
+Context Precision	1.000
+Context Recall	0.667
+
+Ces résultats montrent :
+
+très peu d'hallucinations,
+excellente précision du contexte,
+bonne pertinence des réponses.
+15. Création du jeu d'évaluation
+
+Un dataset de test a été construit à partir :
+
+des documents administratifs,
+d'un fichier Excel contenant les questions et réponses.
+
+Les fichiers ont été convertis en JSON afin d'être compatibles avec RAGAS.
+
+16. Difficultés rencontrées
+
+Au cours du projet, plusieurs problèmes techniques ont été résolus :
+
+erreurs de sérialisation FAISS,
+incompatibilités avec Python 3.14,
+téléchargement lent des modèles dû à une connexion Internet limitée,
+erreurs d'import avec RAGAS,
+renommage massif des documents DOCX,
+nettoyage des métadonnées,
+optimisation des temps d'exécution.
+17. Technologies utilisées
+Langages
+Python
+Frameworks
+LangChain
+Bases vectorielles
+ChromaDB
+FAISS (tests)
+Recherche
+BM25
+EnsembleRetriever
+Embeddings
+HuggingFace Embeddings
+multilingual-e5-small
+Reranking
+CrossEncoder
+BGE Reranker
+LLM
+Gemini Flash
+Groq
+Évaluation
+RAGAS
+18. Résultat final
+
+Le projet a permis de développer un pipeline RAG complet comprenant :
+
+Collecte automatique des données.
+Nettoyage et structuration des documents.
+Découpage en chunks.
+Génération d'embeddings multilingues.
+Indexation dans ChromaDB.
+Recherche hybride (Dense + BM25).
+Reranking des documents.
+Génération des réponses avec un LLM.
+Évaluation de la qualité avec RAGAS.
+Mesure et optimisation des performances.
+
+Le système obtenu présente une très bonne fidélité aux documents sources (Faithfulness ≈ 98 %), une précision contextuelle de 100 %, ainsi qu'une architecture optimisée pour fournir des réponses rapides et fiables sur les procédures administratives marocaines.

@@ -1,0 +1,2 @@
+i did on a testset with 3 :{'faithfulness': 1.0000, 'answer_relevancy': 0.8288, 'context_precision': 0.9444, 'context_recall': 0.5060}
+after adding query rewritting it got worse so i will use model without query rewriting

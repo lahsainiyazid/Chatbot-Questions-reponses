@@ -1,0 +1,26 @@
+embeddings->intfloat/multilingual-e5-small
+db->Chromadb
+retriever->hybrid 0.6 sparse 0.4 dense k=5 for each
+reranker->crosse-encoder/mmarco-mMiniLMv2-L12-H384-v1
+llm->llama-3.3-70b-versatile
+results:
+{'faithfulness': 1.0000, 'answer_relevancy': 0.8556, 'context_precision': 1.0000, 'context_recall': 0.7354}
+speed:
+
+========== Latency ==========
+Retrieval : 0.454 s
+Reranker : 1.972 s
+LLM       : 0.686 s
+Total     : 3.112 s
+=============================
+
+Testing 2/3
+
+========== Latency ==========
+Retrieval : 0.046 s
+Reranker : 1.070 s
+LLM       : 0.394 s
+Total     : 1.510 s
+=============================
+
+Testing 3/3
