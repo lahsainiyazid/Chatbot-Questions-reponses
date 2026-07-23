@@ -67,11 +67,9 @@ Rules:
 - Be clear and professional.
 """
     user_prompt=f"""
-    Context:
-    {contexts_text}
-    Question:
-    {request.question}
-"""
+     Question:{request.question}
+     context:{contexts_text}
+        """
     llm_start_time=time.time()
     response=llm.invoke([("system",system_prompt),("user",user_prompt)])
     llm_time=time.time()-llm_start_time 

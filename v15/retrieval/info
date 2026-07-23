@@ -1,0 +1,6 @@
+embeddings->intfloat-e5-small 
+db->Chroma 
+retrieval->hybrid 0.6 sparsde 0.4 dense k=4 for each 
+reranker->BAAI/bge-reranker-v2-m3 
+llm->llama-3.3-70b-versatile 
+fastapi->yes
