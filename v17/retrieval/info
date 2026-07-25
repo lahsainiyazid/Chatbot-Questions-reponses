@@ -1,0 +1,6 @@
+data->traite.zip
+embeddings->intfloat/multilingula-e5-large
+db->chroma_db
+retrieval->hybrid 0.6 sparse,0.4 dense k=5 for each 
+reranker->BAAI/bge-reranker-base
+fastapi->yes
