@@ -121,7 +121,12 @@ Question:
     # Safe token usage extraction
     token_usage = {}
     if hasattr(response, 'response_metadata') and 'token_usage' in response.response_metadata:
-        token_usage = response.response_metadata['token_usage']
+        um= response.response_metadata['token_usage']
+        token_usage={
+            "total_tokens":um.get("total_tokens",0),
+            "prompt_tokens":um.get("prompt_tokens",0),
+            "completion_tokens":um.get('completion_tokens',0)
+        }
     elif hasattr(response, 'usage_metadata'):
         um = response.usage_metadata
         token_usage = {
