@@ -1,13 +1,15 @@
 import json
 import os
+import certifi
 import time
 import hashlib
 import redis
 from fastapi import FastAPI
 from pydantic import BaseModel
+from pymongo import MongoClient
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
-from langchain_chroma import Chroma
+from langchain_mongodb import MongoDBAtlasVectorSearch
 from langchain_community.retrievers import BM25Retriever
 from langchain_classic.retrievers import EnsembleRetriever
 from sentence_transformers import CrossEncoder
@@ -30,7 +32,10 @@ redis_client = redis.from_url(
     socket_connect_timeout=2,   # Kept your original timeouts
     socket_timeout=2
 )
-
+mongo_uri=os.getenv("MONGODB_URI")
+mongo_client=MongoClient(mongo_uri,
+                         tlsCAFile=certifi.where())
+collection=mongo_client["rag_db"]["chunks"]
 class QuestionRequest(BaseModel):
     question: str
 
@@ -39,37 +44,21 @@ llm_answer = ChatGroq(model="llama-3.3-70b-versatile", temperature=0, api_key=os
 
 documents = []
 try:
-    with open("/home/yazid/stage/v6/chunking/complete_windows.json") as f:
-        data = json.load(f)
-        for item in data:
-            text = f"""
-Content:{item.get("Content", "")}
-            """.strip()
-            documents.append(Document(
-                page_content=text,
-                metadata={
-                    "source": item.get("source", ""),
-                    "id": item.get("id", "")
-                }
-            ))
+    cursor=collection.find({})
+    for item in cursor:
+        documents.append(Document(page_content=item.get("text",""),metadata={"source":item.get("source",""),"id":item.get("id","")}))
 except Exception as e:
-    print(f"There was an error error-code:{e}")
-
+    print(f"Error:{e} while loading chunks!")
 embeddings = HuggingFaceEmbeddings(
     model_name="intfloat/multilingual-e5-large",
     model_kwargs={"device": "cpu"},
     encode_kwargs={"normalize_embeddings": True}
 )
 
-db = Chroma(
-    persist_directory="/home/yazid/stage/v17/embeddings+db/content/db_17_v17",
-    embedding_function=embeddings,
-    collection_name="db_17_v17"
-)
-
+vector_store=MongoDBAtlasVectorSearch(collection=collection,embedding=embeddings,index_name="vector_index")
 bm25 = BM25Retriever.from_documents(documents)
 bm25.k = 5
-dense = db.as_retriever(search_kwargs={"k": 5})
+dense = vector_store.as_retriever(search_kwargs={"k": 5})
 hybrid = EnsembleRetriever(retrievers=[bm25, dense], weights=[0.6, 0.4])
 reranker = CrossEncoder("BAAI/bge-reranker-base")
 
