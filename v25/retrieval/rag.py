@@ -64,8 +64,13 @@ reranker = CrossEncoder("BAAI/bge-reranker-base")
 
 @app.get("/")
 def home():
-    return {"Rag is running": "True", "Version": "V24"}
-
+    return {"Rag is running": "True", "Version": "V25"}
+@app.get("/documents")
+def get_documents():
+    documents=list(collection.find({},{"_id":1,"source":1,"id":1,"text":1}))
+    for doc in documents:
+        doc["_id"]=str(doc["_id"]) #Because Json only supports standard types and "_id" is an object so we convert it first to string 
+    return documents  
 @app.post("/ask")
 def ask_rag_question(request: QuestionRequest):
     start = time.time()
