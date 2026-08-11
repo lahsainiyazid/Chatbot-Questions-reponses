@@ -71,6 +71,20 @@ def get_documents():
     for doc in documents:
         doc["_id"]=str(doc["_id"]) #Because Json only supports standard types and "_id" is an object so we convert it first to string 
     return documents
+@app.get("/document/{filename}")
+def get_document(filename:str):
+    docs=list(collection.find({"source":filename}))
+    if not docs:
+        raise HTTPException(404,detail="File not found")
+    for doc in docs:
+        doc["_id"]=str(doc["_id"])
+    return {
+        "filename":filename,
+        "total_chunks":len(docs),
+        "chunks":docs 
+
+    }
+    
 @app.delete("/documents/{filename}")
 def delete_document(filename:str):
     result=collection.delete_many({"source":filename})
