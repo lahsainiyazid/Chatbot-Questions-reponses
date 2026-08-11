@@ -70,7 +70,17 @@ def get_documents():
     documents=list(collection.find({},{"_id":1,"source":1,"id":1,"text":1}))
     for doc in documents:
         doc["_id"]=str(doc["_id"]) #Because Json only supports standard types and "_id" is an object so we convert it first to string 
-    return documents 
+    return documents
+@app.delete("/documents/{filename}")
+def delete_document(filename:str):
+    result=collection.delete_many({"source":filename})
+    if result.deleted_count==0:
+        raise HTTPException(404,detail="Document not found") #Code error for data not found 400 is for bad request 
+    return{
+        "message":"Document deleted successfully",
+        "filename":filename,
+        "deleted_chunks":result.deleted_count 
+    }
 @app.post("/upload_file")
 async def upload_documents(file:UploadFile=File(...)):#file->variable name,UploadFile->type,File(...)->it is obligatory to pass a file 
     if not file.filename.endswith(".docx"):
