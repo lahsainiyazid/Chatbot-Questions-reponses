@@ -81,6 +81,26 @@ def delete_document(filename:str):
         "filename":filename,
         "deleted_chunks":result.deleted_count 
     }
+@app.put("/document/{filename}")
+async def update_document(filename:str,file:UploadFile=File(...)):
+    if not file.filename.endswith(".docx"):
+        raise HTTPException(400,detail="Only .docx files are accepted")
+    delete_file=collection.delete_many({"source":filename})
+    content=await file.read()
+    chunks=parse_docx(content)
+    if not chunks:
+        raise HTTPException(400,detail="Error while extracting chunks from document!")
+    for chunk in chunks:
+        chunk["source"]=file.filename 
+    result=collection.insert_many(chunks)
+    return {
+        "message":"Document updated successfully",
+        "filename":file.filename,
+        "new_chunks_count":len(result.inserted_ids),
+        "deleted_chunks":delete_file.deleted_count,
+
+    }
+
 @app.post("/upload_file")
 async def upload_documents(file:UploadFile=File(...)):#file->variable name,UploadFile->type,File(...)->it is obligatory to pass a file 
     if not file.filename.endswith(".docx"):
