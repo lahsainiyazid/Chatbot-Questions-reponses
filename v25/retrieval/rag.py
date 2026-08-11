@@ -4,7 +4,7 @@ import certifi
 import time
 import hashlib
 import redis
-from fastapi import FastAPI
+from fastapi import FastAPI,UploadFile,File,HTTPException
 from pydantic import BaseModel
 from pymongo import MongoClient
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -70,7 +70,23 @@ def get_documents():
     documents=list(collection.find({},{"_id":1,"source":1,"id":1,"text":1}))
     for doc in documents:
         doc["_id"]=str(doc["_id"]) #Because Json only supports standard types and "_id" is an object so we convert it first to string 
-    return documents  
+    return documents 
+@app.post("/upload_file")
+async def upload_documents(file:UploadFile=File(...)):#file->variable name,UploadFile->type,File(...)->it is obligatory to pass a file 
+    if not file.filename.endswith(".docx"):
+        raise HTTPException(status_code=400,detail="Only docx files are supported")
+    content=await file.read()
+    chunks=parse_docx(content)
+    if not chunks :
+        raise HTTPException(status_code=400,detail="Error while generating chunks")
+    for chunk in chunks:
+        chunk["source"]=file.filename 
+    result=collection.insert_many(chunks)
+    return {"message":"Document loaded successfully",
+            "filename":file.filename,
+            "Number of chunks":len(result.inserted_ids)
+            }
+     
 @app.post("/ask")
 def ask_rag_question(request: QuestionRequest):
     start = time.time()
