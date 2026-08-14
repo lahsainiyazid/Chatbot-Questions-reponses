@@ -1,9 +1,12 @@
 import json
 import os
+import io 
+from PyPDF2 import PdfReader 
 import certifi
 import time
 import hashlib
 import redis
+
 from fastapi import FastAPI,UploadFile,File,HTTPException
 from pydantic import BaseModel
 from pymongo import MongoClient
@@ -61,6 +64,25 @@ bm25.k = 5
 dense = vector_store.as_retriever(search_kwargs={"k": 5})
 hybrid = EnsembleRetriever(retrievers=[bm25, dense], weights=[0.6, 0.4])
 reranker = CrossEncoder("BAAI/bge-reranker-base")
+def parse_pdf(content:bytes):
+    try:
+        pdf_reader=PdfReader(io.BytesIO(content))
+        text=""
+        for page in pdf_reader.pages:
+            text+=page.extract_text()+'\n'
+        chunks=[]
+        chunk_size=1000
+        words=text.split()
+        for i in range(0,len(words),chunk_size):
+            chunk_text=" ".join(words[i:i+chunk_size])
+            if chunk_text.strip():
+                chunks.append({"text":chunk_text,
+                              "id":hashlib.md5(chunk_text.encode()).hexdigest()})
+        return chunks 
+    except Exception as e:
+        print(f"Error:{e} while loading documents")
+        return []
+
 
 @app.get("/")
 def home():
@@ -97,11 +119,14 @@ def delete_document(filename:str):
     }
 @app.put("/document/{filename}")
 async def update_document(filename:str,file:UploadFile=File(...)):
-    if not file.filename.endswith(".docx"):
-        raise HTTPException(400,detail="Only .docx files are accepted")
+    if not (file.filename.endswith(".docx") or file.filename.endswith(".pdf")):
+        raise HTTPException(400,detail="Only .docx and .pdf  files are accepted")
     delete_file=collection.delete_many({"source":filename})
     content=await file.read()
-    chunks=parse_docx(content)
+    if file.filename.endswith(".pdf"):
+        chunks=parse_pdf(content)
+    else :
+        chunks=parse_docx(content)
     if not chunks:
         raise HTTPException(400,detail="Error while extracting chunks from document!")
     for chunk in chunks:
@@ -117,10 +142,13 @@ async def update_document(filename:str,file:UploadFile=File(...)):
 
 @app.post("/upload_file")
 async def upload_documents(file:UploadFile=File(...)):#file->variable name,UploadFile->type,File(...)->it is obligatory to pass a file 
-    if not file.filename.endswith(".docx"):
-        raise HTTPException(status_code=400,detail="Only docx files are supported")
+    if not (file.filename.endswith(".docx") or file.filename.endswith(".pdf")):
+        raise HTTPException(status_code=400,detail="Only docx and pdf files are supported")
     content=await file.read()
-    chunks=parse_docx(content)
+    if file.filename.endswith(".pdf"):
+        chunks=parse_pdf(content)
+    else :
+        chunks=parse_docx(content)
     if not chunks :
         raise HTTPException(status_code=400,detail="Error while generating chunks")
     for chunk in chunks:
