@@ -6,7 +6,7 @@ import certifi
 import time
 import hashlib
 import redis
-
+import pandas as pd
 from fastapi import FastAPI,UploadFile,File,HTTPException
 from pydantic import BaseModel
 from pymongo import MongoClient
@@ -82,8 +82,27 @@ def parse_pdf(content:bytes):
     except Exception as e:
         print(f"Error:{e} while loading documents")
         return []
-
-
+def parse_excel(content:bytes):
+    try:
+        excel_file=pd.ExcelFile(io.bytesIO(content))
+        all_text=""
+        for sheet_name in excel_file.sheet_names:
+            df=pd.read_excel(excel_file,sheet_name=sheet_name)
+            for col in df.columns:
+                values=df[col].dropna().astype(str).to_list()
+                if values:
+                    all_text+=f"Column{col}"+",".join(values).+"\n"
+    chunks=[]
+    chunk_size=1000
+    words=all_text.split()
+        for i in range(0,len(words),chunk_size):
+            chunk_text=" ".join(words[i:i+chunk_size])
+        if chunk_text.strip():
+            chunks.append({"text":chunk_text,"id":hashlib.md5(chunk_text.encode).hexdigest()})
+        return chunks 
+    except Exception as e:
+        print(f"Error {e} while loading the chunks")
+        return []
 @app.get("/")
 def home():
     return {"Rag is running": "True", "Version": "V25"}
@@ -195,7 +214,7 @@ def ask_rag_question(request: QuestionRequest):
     pairs = [(request.question, doc.page_content) for doc in results]
     scores = reranker.predict(pairs)
     ranked_docs = [doc for _, doc in sorted(zip(scores, results), key=lambda x: x[0], reverse=True)]
-    final_docs = ranked_docs[:2]
+    final_docs = ranked_docs[:3]
     reranker_time = time.time() - reranker_start
 
     context = "\n\n".join(doc.page_content for doc in final_docs)
