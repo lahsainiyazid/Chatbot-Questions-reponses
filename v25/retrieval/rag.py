@@ -2,6 +2,7 @@ import json
 import os
 import io 
 from PyPDF2 import PdfReader 
+from docx import Document as DocxDocument
 import certifi
 import time
 import hashlib
@@ -42,7 +43,7 @@ collection=mongo_client["rag_db"]["chunks"]
 class QuestionRequest(BaseModel):
     question: str
 
-llm_expansion = ChatGroq(model="llama-3.1-8b-instant", temperature=0, api_key=os.environ.get("GROQ_API_KEY"))
+llm_expansion = ChatGroq(model="llama-3.3-70b-instant", temperature=0, api_key=os.environ.get("GROQ_API_KEY"))
 llm_answer = ChatGroq(model="llama-3.3-70b-versatile", temperature=0, api_key=os.environ.get("GROQ_API_KEY"))
 
 documents = []
@@ -64,6 +65,29 @@ bm25.k = 5
 dense = vector_store.as_retriever(search_kwargs={"k": 5})
 hybrid = EnsembleRetriever(retrievers=[bm25, dense], weights=[0.6, 0.4])
 reranker = CrossEncoder("BAAI/bge-reranker-base")
+from docx import Document as DocxDocument
+
+def parse_docx(content: bytes):
+    try:
+        doc = DocxDocument(io.BytesIO(content))
+        text = ""
+        for paragraph in doc.paragraphs:
+            text += paragraph.text + "\n"
+        
+        chunks = []
+        chunk_size = 1000
+        words = text.split()
+        for i in range(0, len(words), chunk_size):
+            chunk_text = " ".join(words[i:i+chunk_size])
+            if chunk_text.strip():
+                chunks.append({
+                    "text": chunk_text,
+                    "id": hashlib.md5(chunk_text.encode()).hexdigest()
+                })
+        return chunks
+    except Exception as e:
+        print(f"Error {e} while loading docx")
+        return []
 def parse_pdf(content:bytes):
     try:
         pdf_reader=PdfReader(io.BytesIO(content))
@@ -84,21 +108,21 @@ def parse_pdf(content:bytes):
         return []
 def parse_excel(content:bytes):
     try:
-        excel_file=pd.ExcelFile(io.bytesIO(content))
+        excel_file=pd.ExcelFile(io.BytesIO(content))
         all_text=""
         for sheet_name in excel_file.sheet_names:
             df=pd.read_excel(excel_file,sheet_name=sheet_name)
             for col in df.columns:
                 values=df[col].dropna().astype(str).to_list()
                 if values:
-                    all_text+=f"Column{col}"+",".join(values).+"\n"
-    chunks=[]
-    chunk_size=1000
-    words=all_text.split()
+                    all_text+=f"Column{col}"+",".join(values)+"\n"
+        chunks=[]
+        chunk_size=1000
+        words=all_text.split()
         for i in range(0,len(words),chunk_size):
             chunk_text=" ".join(words[i:i+chunk_size])
-        if chunk_text.strip():
-            chunks.append({"text":chunk_text,"id":hashlib.md5(chunk_text.encode).hexdigest()})
+            if chunk_text.strip():
+                chunks.append({"text":chunk_text,"id":hashlib.md5(chunk_text.encode()).hexdigest()})
         return chunks 
     except Exception as e:
         print(f"Error {e} while loading the chunks")
@@ -138,14 +162,16 @@ def delete_document(filename:str):
     }
 @app.put("/document/{filename}")
 async def update_document(filename:str,file:UploadFile=File(...)):
-    if not (file.filename.endswith(".docx") or file.filename.endswith(".pdf")):
-        raise HTTPException(400,detail="Only .docx and .pdf  files are accepted")
+    if not (file.filename.endswith(".docx") or file.filename.endswith(".pdf") or file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
+        raise HTTPException(400,detail="Only .docx,.pdf,.xls,.xlsx  files are accepted")
     delete_file=collection.delete_many({"source":filename})
     content=await file.read()
     if file.filename.endswith(".pdf"):
         chunks=parse_pdf(content)
-    else :
+    elif file.name.endswith(".docx") :
         chunks=parse_docx(content)
+    else:
+        chunks=parse_excel(content)
     if not chunks:
         raise HTTPException(400,detail="Error while extracting chunks from document!")
     for chunk in chunks:
@@ -161,13 +187,15 @@ async def update_document(filename:str,file:UploadFile=File(...)):
 
 @app.post("/upload_file")
 async def upload_documents(file:UploadFile=File(...)):#file->variable name,UploadFile->type,File(...)->it is obligatory to pass a file 
-    if not (file.filename.endswith(".docx") or file.filename.endswith(".pdf")):
-        raise HTTPException(status_code=400,detail="Only docx and pdf files are supported")
+    if not (file.filename.endswith(".docx") or file.filename.endswith(".pdf") or file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
+        raise HTTPException(status_code=400,detail="Only .docx,.pdf,.xlsx,.xls files are supported")
     content=await file.read()
     if file.filename.endswith(".pdf"):
         chunks=parse_pdf(content)
-    else :
+    elif file.filename.endswith(".docx") :
         chunks=parse_docx(content)
+    else :
+        chunks=parse_excel(content)
     if not chunks :
         raise HTTPException(status_code=400,detail="Error while generating chunks")
     for chunk in chunks:
