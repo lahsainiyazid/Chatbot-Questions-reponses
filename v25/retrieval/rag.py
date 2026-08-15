@@ -252,23 +252,29 @@ async def update_document(filename: str, file: UploadFile = File(...)):
     "filename":file.filename,
     "Number of chunks":len(inserted_ids)
 }
-    
-
-     
 @app.post("/ask")
 def ask_rag_question(request: QuestionRequest):
+    # 1. Safety check: ensure retrievers are initialized and database has chunks
+    if hybrid is None:
+        raise HTTPException(
+            status_code=400, 
+            detail="No documents available in the knowledge base. Please upload a document first."
+        )
+
     start = time.time()
     normalized_question = request.question.strip().lower()
     cache_key = f"rag_cache:{hashlib.md5(normalized_question.encode('utf-8')).hexdigest()}"
     
+    # 2. Check Redis Cache
     try:
         cached_response = redis_client.get(cache_key)
         if cached_response:
             print(f"{request.question} was found in the cache:")
             return json.loads(cached_response)
     except Exception as e:
-        print(f"Error:{e}")
+        print(f"Cache lookup error: {e}")
 
+    # 3. Query Expansion
     expansion_start = time.time()
     expansion_prompt = f"""أنت محرك بحث ذكي متخصص في الوثائق الإدارية. مهمتك هي إعادة صياغة السؤال التالي إلى استعلامين بديلين دقيقين لتحسين البحث.
 قواعد صارمة وممنوع مخالفتها:
@@ -283,10 +289,12 @@ def ask_rag_question(request: QuestionRequest):
     expanded_query = llm_expansion.invoke(expansion_prompt).content.strip()
     expansion_time = time.time() - expansion_start
 
+    # 4. Hybrid Retrieval (Using real-time synced ensemble retriever)
     retrieval_start = time.time()
     results = hybrid.invoke(expanded_query)
     retrieval_time = time.time() - retrieval_start
 
+    # 5. Reranking with CrossEncoder
     reranker_start = time.time()
     pairs = [(request.question, doc.page_content) for doc in results]
     scores = reranker.predict(pairs)
@@ -294,6 +302,7 @@ def ask_rag_question(request: QuestionRequest):
     final_docs = ranked_docs[:3]
     reranker_time = time.time() - reranker_start
 
+    # 6. LLM Generation
     context = "\n\n".join(doc.page_content for doc in final_docs)
     system_prompt = """You are an expert assistant for Moroccan public administration.
 Answer ONLY from the provided context.
@@ -305,6 +314,7 @@ Reply in the user's language.
     user_prompt = f"""
 Context:
 {context}
+
 Question:
 {request.question}
 """
@@ -331,9 +341,11 @@ Question:
         "cached": "False"
     }
 
+    # 7. Store Result in Redis Cache (24h TTL)
     try:
         redis_client.setex(cache_key, 86400, json.dumps(final_response))
     except Exception as e:
-        print(f"Failed to save to cache error:{e}")
+        print(f"Failed to save to cache error: {e}")
 
     return final_response
+
