@@ -173,14 +173,20 @@ def get_document(filename:str):
     }
     
 @app.delete("/documents/{filename}")
-def delete_document(filename:str):
-    result=collection.delete_many({"source":filename})
-    if result.deleted_count==0:
-        raise HTTPException(404,detail="Document not found") #Code error for data not found 400 is for bad request 
-    return{
-        "message":"Document deleted successfully",
-        "filename":filename,
-        "deleted_chunks":result.deleted_count 
+def delete_document(filename: str):
+    # 1. Delete matching chunks from MongoDB
+    result = collection.delete_many({"source": filename})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # 2. Rebuild in-memory retrievers & invalidate Redis cache
+    sync_retrievers()
+    clear_cache()
+    
+    return {
+        "message": "Document deleted successfully",
+        "filename": filename,
+        "deleted_chunks": result.deleted_count 
     }
 @app.put("/document/{filename}")
 async def update_document(filename: str, file: UploadFile = File(...)):
