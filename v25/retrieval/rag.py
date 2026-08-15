@@ -207,26 +207,30 @@ async def update_document(filename:str,file:UploadFile=File(...)):
 
     }
 
-@app.post("/upload_file")
-async def upload_documents(file:UploadFile=File(...)):#file->variable name,UploadFile->type,File(...)->it is obligatory to pass a file 
-    if not (file.filename.endswith(".docx") or file.filename.endswith(".pdf") or file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
-        raise HTTPException(status_code=400,detail="Only .docx,.pdf,.xlsx,.xls files are supported")
+@app.post('/upload_file')
+    async def upload_documents(file:UploadFile=File(...)):
+    if not (file.filename.endswith('.docx') or file.filename.endswith('.pdf') or file.filename.endswith('.xls') or file.filename.endswith('.xlsx')):
+       raise HTTPException(status_code=400,detail='Only .docx,.pdf,.xls,.xlsx files are supported')
     content=await file.read()
-    if file.filename.endswith(".pdf"):
-        chunks=parse_pdf(content)
-    elif file.filename.endswith(".docx") :
+    if file.filename.endswith('.docx'):
         chunks=parse_docx(content)
-    else :
+    elif file.filename.endswith('.pdf'):
+        chunks=parse_pdf(content)
+    else:
         chunks=parse_excel(content)
-    if not chunks :
-        raise HTTPException(status_code=400,detail="Error while generating chunks")
-    for chunk in chunks:
-        chunk["source"]=file.filename 
-    result=collection.insert_many(chunks)
-    return {"message":"Document loaded successfully",
-            "filename":file.filename,
-            "Number of chunks":len(result.inserted_ids)
-            }
+    if not chunks:
+        raise HTTPException(status_code=400,detail='Error while generating chunks')
+    docs_to_add=[Document(page_content=chunk["text"],metadata={"source":chunk["source"],"id":chunk["id"]}) for chunk in chunks ]
+    inserted_ids=vector_store.add_documents(docs_to_add)
+    sync_retrievers()
+    clear_cache()
+    return {
+    "Message":"Documents loaded successfully",
+    "filename":file.filename,
+    "Number of chunks":len(inserted_ids)
+}
+    
+
      
 @app.post("/ask")
 def ask_rag_question(request: QuestionRequest):
