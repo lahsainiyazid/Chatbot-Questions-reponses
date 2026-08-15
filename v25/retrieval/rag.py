@@ -10,6 +10,8 @@ import redis
 import pandas as pd
 from fastapi import FastAPI,UploadFile,File,HTTPException
 from pydantic import BaseModel
+from docx import Document as DocxDocument
+
 from pymongo import MongoClient
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document
@@ -65,7 +67,27 @@ bm25.k = 5
 dense = vector_store.as_retriever(search_kwargs={"k": 5})
 hybrid = EnsembleRetriever(retrievers=[bm25, dense], weights=[0.6, 0.4])
 reranker = CrossEncoder("BAAI/bge-reranker-base")
-from docx import Document as DocxDocument
+def sync_retrievers():
+    global bm25,hybrid,dense 
+    latest_docs=[]
+    for item in collection.find({}):
+        latest_docs.append(Document(page_content=item.get('text',''),metadata={'source':item.get('source',''),'id':item.get('id')}))
+    if latest_docs:
+        bm25=BM25Retriever.from_documents(latest_docs)
+        bm25.k=5 
+        dense=vector_store.as_retriever(search_kwargs={'k':5})
+        hybrid=EnsembleRetriever(retrievers=[bm25,dense],weights=[0.6,0.4])
+    else :
+        bm25=None 
+        dense=None
+        hybrid=None 
+def clear_cache():
+    try:
+        keys=redis_client.keys('rag_cache:*')
+        if keys:
+            redis_client.delete(*keys)
+    except Exception as e:
+        print(f"Error:{e} while clearing the cache!")
 
 def parse_docx(content: bytes):
     try:
