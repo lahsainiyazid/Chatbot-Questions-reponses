@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --default-timeout=1000 --retries 10 --no-cache-dir -r requirements.txt
 
 # Pre-download HuggingFace models into the image to avoid slow container startup times
 RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('BAAI/bge-reranker-base')"
