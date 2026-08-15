@@ -183,30 +183,47 @@ def delete_document(filename:str):
         "deleted_chunks":result.deleted_count 
     }
 @app.put("/document/{filename}")
-async def update_document(filename:str,file:UploadFile=File(...)):
+async def update_document(filename: str, file: UploadFile = File(...)):
     if not (file.filename.endswith(".docx") or file.filename.endswith(".pdf") or file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
-        raise HTTPException(400,detail="Only .docx,.pdf,.xls,.xlsx  files are accepted")
-    delete_file=collection.delete_many({"source":filename})
-    content=await file.read()
+        raise HTTPException(status_code=400, detail="Only .docx, .pdf, .xls, .xlsx files are accepted")
+    
+    # 1. Delete existing document chunks from MongoDB
+    delete_result = collection.delete_many({"source": filename})
+    
+    # 2. Parse new file content
+    content = await file.read()
     if file.filename.endswith(".pdf"):
-        chunks=parse_pdf(content)
-    elif file.name.endswith(".docx") :
-        chunks=parse_docx(content)
+        chunks = parse_pdf(content)
+    elif file.filename.endswith(".docx"):  # Fixed: file.filename instead of file.name
+        chunks = parse_docx(content)
     else:
-        chunks=parse_excel(content)
+        chunks = parse_excel(content)
+        
     if not chunks:
-        raise HTTPException(400,detail="Error while extracting chunks from document!")
-    for chunk in chunks:
-        chunk["source"]=file.filename 
-    result=collection.insert_many(chunks)
+        raise HTTPException(status_code=400, detail="Error while extracting chunks from document!")
+        
+    # 3. Format into LangChain Document objects
+    docs_to_add = [
+        Document(
+            page_content=chunk["text"],
+            metadata={"source": file.filename, "id": chunk["id"]}
+        )
+        for chunk in chunks
+    ]
+    
+    # 4. Generate embeddings and save to MongoDB Atlas
+    inserted_ids = vector_store.add_documents(docs_to_add)
+    
+    # 5. Synchronize memory & purge cache
+    sync_retrievers()
+    clear_cache()
+
     return {
-        "message":"Document updated successfully",
-        "filename":file.filename,
-        "new_chunks_count":len(result.inserted_ids),
-        "deleted_chunks":delete_file.deleted_count,
-
+        "message": "Document updated successfully",
+        "filename": file.filename,
+        "new_chunks_count": len(inserted_ids),
+        "deleted_chunks": delete_result.deleted_count
     }
-
 @app.post('/upload_file')
     async def upload_documents(file:UploadFile=File(...)):
     if not (file.filename.endswith('.docx') or file.filename.endswith('.pdf') or file.filename.endswith('.xls') or file.filename.endswith('.xlsx')):
