@@ -231,7 +231,7 @@ async def update_document(filename: str, file: UploadFile = File(...)):
         "deleted_chunks": delete_result.deleted_count
     }
 @app.post('/upload_file')
-    async def upload_documents(file:UploadFile=File(...)):
+async def upload_documents(file:UploadFile=File(...)):
     if not (file.filename.endswith('.docx') or file.filename.endswith('.pdf') or file.filename.endswith('.xls') or file.filename.endswith('.xlsx')):
        raise HTTPException(status_code=400,detail='Only .docx,.pdf,.xls,.xlsx files are supported')
     content=await file.read()
